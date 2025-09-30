@@ -9,7 +9,7 @@ import schedule
 import google.generativeai as genai
 from dotenv import load_dotenv
 import random
-from playwright.sync_api import sync_playwright
+# Using simple HTTP requests instead of browser automation
 
 app = Flask(__name__)
 
@@ -76,72 +76,22 @@ What do you think — which new AI agent has impressed you most, or are they all
         return "AI agents are transforming development… but human expertise still matters! 🚀 #AIAgents #Developers"
 
 def post_to_linkedin(content):
-    """Post to LinkedIn using Playwright (works better on Render)"""
-    load_dotenv()
-    email = os.getenv('LINKEDIN_EMAIL')
-    password = os.getenv('LINKEDIN_PASSWORD')
-    
+    """Generate post and make it available for manual posting"""
     try:
-        print(f"🚀 Starting LinkedIn posting at {datetime.now()}")
+        print(f"🚀 Post generated at {datetime.now()}")
         
-        with sync_playwright() as p:
-            # Launch browser with Render-compatible settings
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor'
-                ]
-            )
-            
-            context = browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
-            
-            page = context.new_page()
-            
-            print("🔐 Logging into LinkedIn...")
-            page.goto('https://www.linkedin.com/login', wait_until='networkidle')
-            
-            # Login
-            page.fill('#username', email)
-            page.fill('#password', password)
-            page.click('button[type="submit"]')
-            page.wait_for_load_state('networkidle')
-            
-            print("📱 Going to LinkedIn feed...")
-            page.goto('https://www.linkedin.com/feed/', wait_until='networkidle')
-            
-            print("🎯 Clicking 'Start a post'...")
-            page.click('text="Start a post"')
-            page.wait_for_timeout(3000)
-            
-            print("📝 Adding content...")
-            # Find and fill the content editor
-            editor = page.locator('div[contenteditable="true"]').first
-            editor.click()
-            editor.fill(content)
-            
-            print("🚀 Publishing post...")
-            page.wait_for_timeout(2000)
-            page.click('text="Post"')
-            page.wait_for_timeout(3000)
-            
-            print("✅ SUCCESS: Post published to LinkedIn!")
-            
-            # Save backup copy
-            with open('linkedin_post.txt', 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            browser.close()
-            return True
-            
+        # Save post for manual copying
+        with open('linkedin_post.txt', 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print("✅ Post ready for manual posting to LinkedIn!")
+        print(f"Content preview: {content[:100]}...")
+        print("Access at: /latest-post")
+        
+        return True
+        
     except Exception as e:
-        print(f"❌ LinkedIn posting error: {e}")
+        print(f"❌ Error preparing post: {e}")
         return False
 
 def scheduled_post():
@@ -181,9 +131,9 @@ def scheduled_post():
         json.dump(logs, f, indent=2)
     
     if success:
-        print("🎉 Post published to LinkedIn automatically!")
+        print("🎉 Post generated! Copy from /latest-post to LinkedIn")
     else:
-        print("❌ LinkedIn posting failed!")
+        print("❌ Post generation failed!")
 
 # Start scheduler in background thread
 def start_scheduler():
@@ -198,7 +148,7 @@ def start_scheduler():
     
     print(f"Scheduler started - Test post at {test_time}")
     print("Regular posts at 9 AM and 3 PM")
-    print("Posts will be automatically published to LinkedIn")
+    print("Posts will be generated and available at /latest-post")
     print("Target: 4 posts per week (1-2 daily)")
     
     while True:
