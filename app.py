@@ -10,6 +10,8 @@ import google.generativeai as genai
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from dotenv import load_dotenv
 import random
 
@@ -93,7 +95,12 @@ def post_to_linkedin(content):
         options.binary_location = '/usr/bin/google-chrome'
     
     try:
-        driver = webdriver.Chrome(options=options)
+        if os.getenv('RENDER'):
+            # Use webdriver-manager for Render
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            driver = webdriver.Chrome(options=options)
         
         print("Logging into LinkedIn...")
         driver.get('https://www.linkedin.com/login')
