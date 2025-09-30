@@ -9,6 +9,11 @@ import schedule
 import google.generativeai as genai
 from dotenv import load_dotenv
 import random
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 
@@ -74,27 +79,108 @@ What do you think — which new AI agent has impressed you most, or are they all
         print(f"Gemini error: {e}")
         return "AI agents are transforming development… but human expertise still matters! 🚀 #AIAgents #Developers"
 
-def save_post_for_manual_use(content):
-    """Save post to file for manual copying to LinkedIn"""
+def post_to_linkedin(content):
+    """Actually post to LinkedIn using Selenium"""
+    load_dotenv()
+    email = os.getenv('LINKEDIN_EMAIL')
+    password = os.getenv('LINKEDIN_PASSWORD')
+    
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument('--remote-debugging-port=9222')
+    options.add_argument('--disable-extensions')
+    options.add_argument('--disable-plugins')
+    options.add_argument('--window-size=1920,1080')
+    
+    if os.getenv('RENDER'):
+        options.binary_location = '/usr/bin/google-chrome-stable'
+    
     try:
-        with open('linkedin_post.txt', 'w', encoding='utf-8') as f:
-            f.write(content)
-        print("✅ Post saved to linkedin_post.txt for manual posting")
-        return True
+        print(f"🚀 Starting LinkedIn posting at {datetime.now()}")
+        
+        if os.getenv('RENDER'):
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            driver = webdriver.Chrome(options=options)
+        
+        print("🔐 Logging into LinkedIn...")
+        driver.get('https://www.linkedin.com/login')
+        time.sleep(5)
+        
+        driver.find_element(By.ID, "username").send_keys(email)
+        driver.find_element(By.ID, "password").send_keys(password)
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        time.sleep(10)
+        
+        print("📱 Going to LinkedIn feed...")
+        driver.get('https://www.linkedin.com/feed/')
+        time.sleep(8)
+        
+        print("🎯 Clicking 'Start a post'...")
+        start_post = driver.find_element(By.XPATH, "//*[text()='Start a post']")
+        start_post.click()
+        time.sleep(5)
+        
+        print("📝 Adding content...")
+        script = f"""
+        var editor = document.querySelector('div[contenteditable="true"]');
+        if (editor) {{
+            editor.focus();
+            editor.innerHTML = `{content.replace('`', '\`')}`;
+            editor.dispatchEvent(new Event('input', {{bubbles: true}}));
+            return 'SUCCESS';
+        }}
+        return 'FAILED';
+        """
+        
+        result = driver.execute_script(script)
+        
+        if result == 'SUCCESS':
+            print("🚀 Publishing post...")
+            time.sleep(3)
+            post_btn = driver.find_element(By.XPATH, "//span[text()='Post']")
+            post_btn.click()
+            time.sleep(5)
+            print("✅ SUCCESS: Post published to LinkedIn!")
+            return True
+        else:
+            print("❌ Failed to add content")
+            return False
+        
     except Exception as e:
-        print(f"Error saving post: {e}")
+        print(f"❌ LinkedIn posting error: {e}")
         return False
+    finally:
+        if 'driver' in locals():
+            driver.quit()
+            print("🔒 Browser closed")
 
 def scheduled_post():
     print(f"🚀 Scheduled post triggered at {datetime.now()}")
     
+    # Generate AI agent content
     content = generate_ai_agent_post()
-    success = save_post_for_manual_use(content)
     
+    # Actually post to LinkedIn
+    success = post_to_linkedin(content)
+    
+    # Save backup copy
+    try:
+        with open('linkedin_post.txt', 'w', encoding='utf-8') as f:
+            f.write(content)
+    except:
+        pass
+    
+    # Log the attempt
     log_entry = {
         "timestamp": datetime.now().isoformat(),
         "content": content[:100] + "..." if len(content) > 100 else content,
-        "method": "generated_for_manual_posting",
+        "method": "automated_linkedin_posting",
         "success": success
     }
     
@@ -111,9 +197,9 @@ def scheduled_post():
         json.dump(logs, f, indent=2)
     
     if success:
-        print("🎉 Post generated successfully! Check /download-post to get it")
+        print("🎉 Post published to LinkedIn successfully!")
     else:
-        print("❌ Post generation failed!")
+        print("❌ LinkedIn posting failed!")
 
 # Start scheduler in background thread
 def start_scheduler():
@@ -128,7 +214,7 @@ def start_scheduler():
     
     print(f"Scheduler started - Test post at {test_time}")
     print("Regular posts at 9 AM and 3 PM")
-    print("Posts will be generated and available at /latest-post")
+    print("Posts will be automatically published to LinkedIn")
     print("Target: 4 posts per week (1-2 daily)")
     
     while True:
