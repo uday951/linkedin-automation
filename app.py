@@ -9,11 +9,7 @@ import schedule
 import google.generativeai as genai
 from dotenv import load_dotenv
 import random
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# Removed Selenium imports - using notification system instead
 
 app = Flask(__name__)
 
@@ -79,86 +75,22 @@ What do you think — which new AI agent has impressed you most, or are they all
         print(f"Gemini error: {e}")
         return "AI agents are transforming development… but human expertise still matters! 🚀 #AIAgents #Developers"
 
-def post_to_linkedin(content):
-    """Actually post to LinkedIn using Selenium"""
-    load_dotenv()
-    email = os.getenv('LINKEDIN_EMAIL')
-    password = os.getenv('LINKEDIN_PASSWORD')
-    
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--disable-blink-features=AutomationControlled')
-    options.add_argument('--remote-debugging-port=9222')
-    options.add_argument('--disable-extensions')
-    options.add_argument('--disable-plugins')
-    options.add_argument('--window-size=1920,1080')
-    
-    if os.getenv('RENDER'):
-        options.binary_location = '/usr/bin/google-chrome-stable'
-    
+def notify_post_ready(content):
+    """Generate post and make it available for quick copying"""
     try:
-        print(f"🚀 Starting LinkedIn posting at {datetime.now()}")
+        # Save post to file
+        with open('linkedin_post.txt', 'w', encoding='utf-8') as f:
+            f.write(content)
         
-        if os.getenv('RENDER'):
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
-        else:
-            driver = webdriver.Chrome(options=options)
+        # Create a simple notification (you can extend this)
+        print(f"✅ NEW POST READY at {datetime.now()}")
+        print(f"Content preview: {content[:100]}...")
+        print("Access at: /latest-post")
         
-        print("🔐 Logging into LinkedIn...")
-        driver.get('https://www.linkedin.com/login')
-        time.sleep(5)
-        
-        driver.find_element(By.ID, "username").send_keys(email)
-        driver.find_element(By.ID, "password").send_keys(password)
-        driver.find_element(By.XPATH, "//button[@type='submit']").click()
-        time.sleep(10)
-        
-        print("📱 Going to LinkedIn feed...")
-        driver.get('https://www.linkedin.com/feed/')
-        time.sleep(8)
-        
-        print("🎯 Clicking 'Start a post'...")
-        start_post = driver.find_element(By.XPATH, "//*[text()='Start a post']")
-        start_post.click()
-        time.sleep(5)
-        
-        print("📝 Adding content...")
-        script = f"""
-        var editor = document.querySelector('div[contenteditable="true"]');
-        if (editor) {{
-            editor.focus();
-            editor.innerHTML = `{content.replace('`', '\`')}`;
-            editor.dispatchEvent(new Event('input', {{bubbles: true}}));
-            return 'SUCCESS';
-        }}
-        return 'FAILED';
-        """
-        
-        result = driver.execute_script(script)
-        
-        if result == 'SUCCESS':
-            print("🚀 Publishing post...")
-            time.sleep(3)
-            post_btn = driver.find_element(By.XPATH, "//span[text()='Post']")
-            post_btn.click()
-            time.sleep(5)
-            print("✅ SUCCESS: Post published to LinkedIn!")
-            return True
-        else:
-            print("❌ Failed to add content")
-            return False
-        
+        return True
     except Exception as e:
-        print(f"❌ LinkedIn posting error: {e}")
+        print(f"Error preparing post: {e}")
         return False
-    finally:
-        if 'driver' in locals():
-            driver.quit()
-            print("🔒 Browser closed")
 
 def scheduled_post():
     print(f"🚀 Scheduled post triggered at {datetime.now()}")
@@ -166,8 +98,8 @@ def scheduled_post():
     # Generate AI agent content
     content = generate_ai_agent_post()
     
-    # Actually post to LinkedIn
-    success = post_to_linkedin(content)
+    # Prepare post for quick access
+    success = notify_post_ready(content)
     
     # Save backup copy
     try:
@@ -180,7 +112,7 @@ def scheduled_post():
     log_entry = {
         "timestamp": datetime.now().isoformat(),
         "content": content[:100] + "..." if len(content) > 100 else content,
-        "method": "automated_linkedin_posting",
+        "method": "post_ready_for_copying",
         "success": success
     }
     
@@ -197,9 +129,9 @@ def scheduled_post():
         json.dump(logs, f, indent=2)
     
     if success:
-        print("🎉 Post published to LinkedIn successfully!")
+        print("🎉 Post ready! Access at /latest-post to copy to LinkedIn")
     else:
-        print("❌ LinkedIn posting failed!")
+        print("❌ Post generation failed!")
 
 # Start scheduler in background thread
 def start_scheduler():
@@ -214,7 +146,7 @@ def start_scheduler():
     
     print(f"Scheduler started - Test post at {test_time}")
     print("Regular posts at 9 AM and 3 PM")
-    print("Posts will be automatically published to LinkedIn")
+    print("Posts will be generated and ready at /latest-post for quick copying")
     print("Target: 4 posts per week (1-2 daily)")
     
     while True:
@@ -232,7 +164,13 @@ ping_thread.start()
 def home():
     return jsonify({
         "status": "LinkedIn Automation Bot Running",
-        "message": "Posts 4 times per week automatically",
+        "message": "Generates posts 4 times per week - Access at /quick-post",
+        "endpoints": {
+            "quick_access": "/quick-post",
+            "latest_post": "/latest-post",
+            "logs": "/logs",
+            "status": "/status"
+        },
         "timestamp": datetime.now().isoformat()
     })
 
@@ -258,10 +196,17 @@ def latest_post():
         return jsonify({
             "post": content,
             "timestamp": datetime.now().isoformat(),
-            "instructions": "Copy this content and paste it manually to LinkedIn"
+            "instructions": "Copy this content and paste it to LinkedIn",
+            "status": "ready"
         })
     except:
-        return jsonify({"error": "No post available"})
+        return jsonify({"error": "No post available", "status": "none"})
+
+@app.route('/quick-post')
+def quick_post():
+    """Quick access page for copying posts"""
+    from notification_system import create_quick_access_page
+    return create_quick_access_page()
 
 @app.route('/logs')
 def get_logs():
