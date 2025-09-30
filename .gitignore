@@ -22,4 +22,6 @@ coverage.xml
 .pytest_cache
 .hypothesis
 post_log.json
-*.txt
+generated_*.txt
+perfect_*.txt
+style_test_*.txt
